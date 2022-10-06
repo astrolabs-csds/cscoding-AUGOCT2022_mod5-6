@@ -1,63 +1,128 @@
-// Import package(s)
-var express = require('express');
-var server = express();
-var bodyParser = require('body-parser');
-var mongoose = require('mongoose');
-var dotenv = require('dotenv');
-dotenv.config();
+// Importing express as a function
+const express = require('express');
 
-var userRoutes = require('./routes/user-routes.js');
-var productRoutes = require('./routes/product-routes.js');
+// Import dotenv
+require('dotenv').config();
 
-// Connect to MongoDB
-var dbURL = process.env.DB_URL;
+// CORS (Cross-Origin Resource Sharing)
+const cors = require('cors');
 
-var dbConfig = {
-    "useNewUrlParser": true,
-    "useUnifiedTopology": true
+// Import express-form-data to process HTTP POST requests
+const expressFormData = require('express-form-data');
+
+// Import mongoose to connect to MongoDB Atlas
+const mongoose = require('mongoose');
+const UserModel = require('./models/UserModel.js');
+const userRoutes = require('./routes/user-routes.js');
+const productRoutes = require('./routes/product-routes.js');
+
+// Use passport, passport-jwt to read the clien't jwt
+const passport = require('passport');
+const JwtStrategy = require('passport-jwt').Strategy;
+const ExtractJwt = require('passport-jwt').ExtractJwt;
+const jwtSecret = process.env.JWT_SECRET;
+
+const passportJwtOptions = {
+    jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+    secretOrKey: jwtSecret,
 }
 
+// This function will tell passport how what to do
+// with the payload.
+const passportJwt = (passport) => {
+    passport.use(
+        new JwtStrategy(
+            passportJwtOptions,
+            (jwtPayload, done) => {
+
+                // Tell passport what to do with payload
+                UserModel
+                .findOne({ _id: jwtPayload._id })
+                .then(
+                    (dbDocument) => {
+                        // The done() function will pass the 
+                        // dbDocument to Express. The user's 
+                        // document can then be access via req.user
+                        return done(null, dbDocument)
+                    }
+                )
+                .catch(
+                    (err) => {
+                        // If the _id or anything is invalid,
+                        // pass 'null' to Express.
+                        if(err) {
+                            console.log(err);
+                        }
+                        return done(null, null)
+                    }
+                )
+
+            }
+        )
+    )
+};
+passportJwt(passport)
+
+
+// Import and configure Cloudinary
+const cloudinary = require('cloudinary').v2;
+
+cloudinary.config(
+    {
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET
+    }
+)
+
+// Run the express function to get the methods
+const server = express(); 
+
+// Configure express-form-data for server
+// Is for reading HTML form data
+server.use( expressFormData.parse() );
+server.use( cors() );
+
+// Declare the connnection string
+const connectionString = process.env.DB_URL;
+
+// Create the mongoose config object
+const connectionConfig = {
+    'useNewUrlParser': true,
+    'useUnifiedTopology': true
+}
+
+// Use the .connect() method to connect to MongoDB
 mongoose
-.connect(dbURL, dbConfig)
+.connect( connectionString, connectionConfig )
+// If connection successful, then...
 .then(
     function() {
-        console.log("Database is connected");
+        console.log('DB is connected');
     }
 )
 .catch(
-    function(dbError) {
-        console.log('Database connection error', dbError)
+    function() {
+        console.log('DB not connected');
     }
-);
+)
+
+// This is only here to quicklt check that the backend is running
+server.get('/', function(req, res){res.send('Welcome')});
 
 
-// Configure middlewares for express
-var bodyParserConfig = {extended: false};
-server.use( bodyParser.urlencoded(bodyParserConfig) );
-server.use( bodyParser.json() );
-
-
-// Create routes
-server.get(
-    '/',                                        // http://localhost:3001/
-    function(req, res) {
-        res.send("<h1>Welcome to the server!</h1>");
-    }
+server.use(
+    '/users', userRoutes         // http://www.something.com/user/
 );
 
 server.use(
-    '/users', userRoutes
+    '/products', productRoutes         // http://www.something.com/user/
 );
 
-server.use(
-    '/products', productRoutes
-);
-
-// Listen to port number
+// This is the last thing in your file
 server.listen(
     process.env.PORT,
     function() {
-        console.log('Server running at http://localhost:3001/');
+        console.log('connected to http://localhost:3001/');
     }
-    
 );
