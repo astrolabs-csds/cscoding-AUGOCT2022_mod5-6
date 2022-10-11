@@ -112,7 +112,8 @@ server.get('/', function(req, res){res.send('Welcome')});
 
 
 server.use(
-    '/users', userRoutes         // http://www.something.com/user/
+    '/users', 
+    userRoutes         // http://www.something.com/user/
 );
 
 server.use(

@@ -5,6 +5,8 @@ const UserModel = require('../models/UserModel.js');
 const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cloudinary = require('cloudinary').v2;
+const passport = require('passport');
+
 
 // This is similar to salt in bcrypt
 const jwtSecret = process.env.JWT_SECRET
@@ -188,6 +190,7 @@ router.post('/login',
                                             // Send the jsonwebtoken to the client
                                             res.json(
                                                 {
+                                                    "status": "ok",
                                                     "message": {
                                                         email: dbDocument.email,
                                                         avatar: dbDocument.avatar,
@@ -243,19 +246,133 @@ router.post('/login',
     }
 )
 
+router.post('/update',
+    passport.authenticate('jwt', {session: false}),
+    function(req, res) {
 
-router.get(
-    '/get',         // http://www.website.com/user/get
-    function() {
+        // Client (browser, postman) POSTs this...
+        const formData = {}
+
+        if( req.body.firstName ) formData['firstName'] = req.body.firstName;
+        if( req.body.lastName ) formData['lastName'] = req.body.lastName;
+        if( req.body.email ) formData['email'] = req.body.email;
+        if( req.body.password ) formData['password'] = req.body.password;
+        if( req.body.phone ) formData['phone'] = req.body.phone;
+
+
+
+        // Check if email exists
         UserModel
-        .find()
+        .findById(req.user.id)
+        .then(
+            async function (dbDocument) {
+
+                // If avatar file is included...
+                if( Object.values(req.files).length > 0 ) {
+
+                    const files = Object.values(req.files);
+                    
+                    
+                    // upload to Cloudinary
+                    await cloudinary.uploader.upload(
+                        files[0].path,
+                        (cloudinaryErr, cloudinaryResult) => {
+                            if(cloudinaryErr) {
+                                console.log(cloudinaryErr);
+                                res.json(
+                                    {
+                                        status: "not ok",
+                                        message: "Error occured during image upload"
+                                    }
+                                )
+                            } else {
+                                // Include the image url in formData
+                                formData.avatar = cloudinaryResult.url;
+                                console.log('formData.avatar', formData.avatar)
+                            }
+                        }
+                    )
+                };
+
+                // If email exists...
+                if(dbDocument) {
+           
+                    UserModel
+                    .update(
+                        {
+                            $set: formData
+                        }
+                    )
+                    .then(
+                        function(dbDocument) {
+                            res.send(dbDocument)
+                        }
+                    )
+                    .catch(
+                        function(dbError) {
+                            console.log(dbError, 'error occured at /users/update')
+                            res.status(403).json(
+                                {
+                                    "status": "not ok",
+                                    "message": "Account already exists"
+                                }
+                            )
+                        }
+                    )
+
+                }
+                // If email does NOT exist....
+                else { 
+                    // reject the request
+                    res.status(403).json(
+                        {
+                            "status": "not ok",
+                            "message": "Account already exists"
+                        }
+                    )
+                }
+            }
+        )
+        .catch(
+            function(dbError) {
+
+                // For the developer
+                console.log(
+                    'An error occured', dbError
+                );
+
+                // For the client (frontend app)
+                res.status(503).json(
+                    {
+                        "status": "not ok",
+                        "message": "Something went wrong with db"
+                    }
+                )
+
+            }
+        )
+    }
+);
+
+router.post('/find',         // http://www.website.com/user/get
+    passport.authenticate('jwt', {session: false}),
+    function(req, res) {
+        UserModel
+        .findById(req.user.id)
         .then(
             function(dbDocument) {
                 res.json(
                     {
-                        message: dbDocument
+                        "status": "ok",
+                        "message": {
+                            email: dbDocument.email,
+                            avatar: dbDocument.avatar,
+                            firstName: dbDocument.firstName,
+                            lastName: dbDocument.lastName,
+                            phone: dbDocument.phone
+                        }
                     }
-                )
+                );
             }
         )
         .catch(
