@@ -298,14 +298,29 @@ router.post('/update',
                 if(dbDocument) {
            
                     UserModel
-                    .update(
+                    .findOneAndUpdate(
+                        {
+                            _id: req.user.id
+                        },
                         {
                             $set: formData
-                        }
+                        },
+                        {new: true}
                     )
                     .then(
                         function(dbDocument) {
-                            res.send(dbDocument)
+                            res.json(
+                                {
+                                    "status": "ok",
+                                    "message": {
+                                        email: dbDocument.email,
+                                        avatar: dbDocument.avatar,
+                                        firstName: dbDocument.firstName,
+                                        lastName: dbDocument.lastName,
+                                        phone: dbDocument.phone
+                                    }
+                                }
+                            );
                         }
                     )
                     .catch(
